@@ -1,0 +1,97 @@
+#!/bin/bash
+set -e
+
+INSTALL_DIR="/home/gitlab_ci_runner/gitlab-ci-runner"
+DATA_DIR="/home/gitlab_ci_runner/data"
+
+CI_RUNNERS_COUNT=${CI_RUNNERS_COUNT:-1}
+CA_CERTIFICATES_PATH=${CA_CERTIFICATES_PATH:-$DATA_DIR/certs/ca.crt}
+
+# create and take ownership of ${DATA_DIR}
+mkdir -p ${DATA_DIR}
+chown gitlab_ci_runner:gitlab_ci_runner ${DATA_DIR}
+
+# create the builds directory
+sudo -u gitlab_ci_runner -H mkdir -p ${DATA_DIR}/builds/
+
+# create the .ssh directory
+sudo -u gitlab_ci_runner -H mkdir -p ${DATA_DIR}/.ssh/
+
+# generate deploy key
+if [ ! -e ${DATA_DIR}/.ssh/id_rsa -o ! -e ${DATA_DIR}/.ssh/id_rsa.pub ]; then
+  echo "Generating SSH deploy keys..."
+  rm -rf ${DATA_DIR}/.ssh/id_rsa ${DATA_DIR}/.ssh/id_rsa.pub
+  sudo -u gitlab_ci_runner -H ssh-keygen -t rsa -N "" -f ${DATA_DIR}/.ssh/id_rsa
+fi
+
+# make sure the ssh keys have the right ownership and permissions
+chmod 600 ${DATA_DIR}/.ssh/id_rsa ${DATA_DIR}/.ssh/id_rsa.pub
+chmod 700 ${DATA_DIR}/.ssh
+chown -R gitlab_ci_runner:gitlab_ci_runner ${DATA_DIR}/.ssh/
+
+cd ${INSTALL_DIR}
+
+if [ -f "${CA_CERTIFICATES_PATH}" ]; then
+  echo "Updating CA certificates..."
+  cp "${CA_CERTIFICATES_PATH}" /usr/local/share/ca-certificates/ca.crt
+  update-ca-certificates --fresh >/dev/null
+fi
+
+appStart () {
+  echo "Starting gitlab-ci-runner..."
+
+  # make sure the runner is configured
+  if [ ! -e ${DATA_DIR}/config.yml ]; then
+    appSetup
+  fi
+
+  # remove  stale runners.pid if it exists
+  sudo -u gitlab_ci_runner -H rm -rf ${INSTALL_DIR}/tmp/pids/runners.pid
+
+  sudo -u gitlab_ci_runner -H ln -sf ${DATA_DIR}/config.yml config.yml
+  exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+}
+
+appSetup () {
+  if [ -n "${CI_SERVER_URL}" -a -n "${REGISTRATION_TOKEN}" ]; then
+    sudo -u gitlab_ci_runner -H CI_SERVER_URL=${CI_SERVER_URL} REGISTRATION_TOKEN=${REGISTRATION_TOKEN} bundle exec ./bin/setup
+  else
+    sudo -u gitlab_ci_runner -H bundle exec ./bin/setup
+  fi
+  sudo -u gitlab_ci_runner -H mv config.yml ${DATA_DIR}/config.yml
+}
+
+appHelp () {
+  echo "Available options:"
+  echo " app:start          - Starts the gitlab-ci server (default)"
+  echo " app:setup          - Setup the runner. Interactively or by passing URL and Token as params."
+  echo " app:help           - Displays the help"
+  echo " [command]          - Execute the specified linux command eg. bash."
+}
+
+case "$1" in
+  app:start)
+    appStart
+    ;;
+  app:setup)
+    appSetup
+    ;;
+  app:help)
+    appHelp
+    ;;
+  *)
+    if [ -x $1 ]; then
+      $1
+    else
+      prog=$(which $1)
+      if [ -n "${prog}" ] ; then
+        shift 1
+        $prog $@
+      else
+        appHelp
+      fi
+    fi
+    ;;
+esac
+
+exit 0
