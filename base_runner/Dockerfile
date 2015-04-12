@@ -1,4 +1,4 @@
-FROM ubuntu:trusty
+FROM dockerfile/ubuntu
 MAINTAINER sameer@damagehead.com
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
