@@ -1,4 +1,4 @@
-FROM base_runner
+FROM ayufan/gitlab-ci-multi-runner:latest
 
 # Install Java.
 RUN \
