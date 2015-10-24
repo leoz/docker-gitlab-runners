@@ -1,2 +1,2 @@
 # docker-gitlab-runners
-Dockerfiles for building GitLab runners, specifically Android
+Docker files for building GitLab runners of Cordova and Ionic projects for Android targets
