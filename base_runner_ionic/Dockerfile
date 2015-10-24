@@ -4,7 +4,9 @@ FROM base_runner_android
 
 RUN curl --silent --location https://deb.nodesource.com/setup_4.x | sudo bash -
 RUN apt-get install -y nodejs
+RUN rm /usr/bin/node
 RUN ln -s "$(which nodejs)" /usr/bin/node
+RUN apt-get autoremove
 RUN apt-get install -y lib32stdc++6 lib32z1
 
 # Install Cordova and Ionic
